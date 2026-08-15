@@ -5,6 +5,14 @@ published, and removing or renaming one is a breaking change.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-15
+
+### Changed
+
+- Rewrote the origin note in the README to describe only what actually happened.
+  The published 0.1.0 text carried invented specifics — a discovery timeline and a
+  line count — that were never true. No code changes.
+
 ## [0.1.0] — 2026-08-15
 
 First release.
