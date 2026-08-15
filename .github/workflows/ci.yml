@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: MCP protocol smoke test
+        run: npm run check:mcp
+      - name: Self-scan must stay clean
+        run: node dist/cli.js src
+      - name: The vulnerable example must still trip the scanner
+        run: |
+          if node dist/cli.js examples/badcart --no-color; then
+            echo "::error::badcart produced no findings — a detector has regressed"
+            exit 1
+          fi
+
+  scan:
+    name: code scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      # The upload action reads workflow run metadata to attach results to this
+      # run. Without it the step fails with "Resource not accessible by
+      # integration" even when the SARIF itself is valid.
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Scan this repository
+        run: node dist/cli.js . --sarif moneypath.sarif --fail-on none
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@v4
+        # Code scanning uploads are unavailable on private repositories without
+        # Advanced Security, and on pull requests from forks. The scan above is
+        # the real check; a rejected upload should not fail the build.
+        continue-on-error: true
+        with:
+          sarif_file: moneypath.sarif
+          category: moneypath
+      - name: Keep the SARIF available regardless
+        uses: actions/upload-artifact@v4
+        with:
+          name: moneypath-sarif
+          path: moneypath.sarif

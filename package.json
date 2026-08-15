@@ -1,0 +1,67 @@
+{
+  "name": "moneypath",
+  "version": "0.1.0",
+  "description": "Static analyzer that finds payment logic flaws in Razorpay and Stripe checkouts — client-controlled amounts, rupee/paise unit bugs, unverified webhooks, and payments confirmed from the browser.",
+  "keywords": [
+    "razorpay",
+    "stripe",
+    "payment-security",
+    "price-tampering",
+    "business-logic",
+    "static-analysis",
+    "security-scanner",
+    "checkout",
+    "webhook-security",
+    "appsec",
+    "sast",
+    "nextjs",
+    "paise",
+    "payment-gateway",
+    "vibe-coding"
+  ],
+  "homepage": "https://github.com/ANSHUL-REAL/moneypath#readme",
+  "bugs": {
+    "url": "https://github.com/ANSHUL-REAL/moneypath/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ANSHUL-REAL/moneypath.git"
+  },
+  "license": "MIT",
+  "author": "Anshul Nautiyal <anshulnautiyal2006@gmail.com>",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "moneypath": "./dist/cli.js",
+    "moneypath-mcp": "./dist/mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "llms.txt"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:mcp": "node scripts/check-mcp.js",
+    "scan:example": "node dist/cli.js examples/badcart",
+    "scan:self": "node dist/cli.js src",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1",
+    "ts-morph": "^24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

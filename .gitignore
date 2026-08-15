@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+
+*.log
+npm-debug.log*
+
+# Generated reports
+*.sarif
+sarif.json
+report.html
+moneypath-report.html
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.tsbuildinfo

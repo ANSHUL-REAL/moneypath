@@ -1,0 +1,33 @@
+name: Missed bug
+description: A real payment flaw that moneypath did not report
+title: 'Missed: <short description>'
+labels: [missed-detection]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Known gaps are listed under Roadmap in the README — cross-file tracing and
+        gateways other than Razorpay and Stripe are already on it. Everything else is
+        worth reporting.
+  - type: textarea
+    id: code
+    attributes:
+      label: The vulnerable code
+      description: Smallest snippet that reproduces it. Redact keys.
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: attack
+    attributes:
+      label: What an attacker gets
+      description: Concretely — what does the request look like, and what do they pay?
+    validations:
+      required: true
+  - type: dropdown
+    id: gateway
+    attributes:
+      label: Gateway
+      options: [Razorpay, Stripe, Other]
+    validations:
+      required: true

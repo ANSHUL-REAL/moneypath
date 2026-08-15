@@ -1,0 +1,52 @@
+# moneypath
+
+> A static analyzer that finds payment logic flaws in Razorpay and Stripe checkouts:
+> amounts taken from the client instead of computed server-side, rupee/paise and
+> dollar/cent conversion bugs, orders marked paid by browser code, and webhooks that
+> never verify their signature. Runs offline with `npx moneypath`, no account or config.
+
+## What problem it solves
+
+Generic security scanners cannot detect payment business-logic flaws. A checkout that
+accepts the price from the request body looks structurally identical to one that computes
+it server-side. moneypath resolves the difference by tracing the amount argument of a
+payment gateway call backwards to its origin.
+
+## Rules
+
+- MP001 (critical) — payment amount originates in the HTTP request and is never recomputed server-side
+- MP002 (high) — amount not converted to the gateway minor unit; Razorpay charges paise, Stripe charges cents
+- MP003 (high) — minor-unit conversion is unrounded, producing non-integer amounts from float arithmetic
+- MP004 (high) — amount multiplied by 100 twice, overcharging 100x
+- MP005 (critical) — order marked paid from browser code or an unverified redirect parameter
+- MP006 (critical) — payment webhook handler does not verify its signature
+
+## Usage
+
+- CLI: `npx moneypath [path]`
+- Report: `npx moneypath --html report.html`
+- CI: `npx moneypath --sarif moneypath.sarif --fail-on critical`
+- JSON: `npx moneypath --json`
+- MCP server: `npx -y moneypath-mcp`, exposing `scan_payment_code` and `list_payment_rules`
+
+Exit codes: 0 clean or below threshold, 1 findings at or above it, 2 bad usage.
+
+## Trust model
+
+Findings are labelled `confirmed` (full path traced) or `review` (pattern matched,
+human judgement needed). Values read from the application's own database are treated as
+safe even when the client chose which row, because that is the correct pattern. The tool
+deliberately prefers false negatives over false positives.
+
+## Scope limits
+
+Syntactic analysis, roughly four hops of backward tracing. Razorpay and Stripe only.
+Finds logic flaws, not injection, XSS, or dependency vulnerabilities. A clean run means
+these six specific bugs are absent, not that the checkout is secure.
+
+## Links
+
+- README: https://github.com/ANSHUL-REAL/moneypath#readme
+- Agent instructions: https://github.com/ANSHUL-REAL/moneypath/blob/main/AGENTS.md
+- Vulnerable example: https://github.com/ANSHUL-REAL/moneypath/tree/main/examples/badcart
+- npm: https://www.npmjs.com/package/moneypath

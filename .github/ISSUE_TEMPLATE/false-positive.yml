@@ -1,0 +1,39 @@
+name: False positive
+description: moneypath flagged code that is actually correct
+title: 'False positive: MP0NN in <short description>'
+labels: [false-positive]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These matter more than missed bugs. A scanner that cries wolf on payment code
+        gets uninstalled, so a confirmed false positive goes to the front of the queue.
+  - type: input
+    id: rule
+    attributes:
+      label: Which rule
+      placeholder: MP001
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: The code it flagged
+      description: Reduce it to the smallest snippet that still triggers the finding. Redact keys.
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is actually correct
+      description: Where does the real value come from, and what makes it trustworthy?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 'moneypath 0.1.0, node 20.11.0'
+    validations:
+      required: true
