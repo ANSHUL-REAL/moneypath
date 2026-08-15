@@ -1,6 +1,6 @@
 {
   "name": "moneypath",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Static analyzer that finds payment logic flaws in Razorpay and Stripe checkouts — client-controlled amounts, rupee/paise unit bugs, unverified webhooks, and payments confirmed from the browser.",
   "keywords": [
     "razorpay",
