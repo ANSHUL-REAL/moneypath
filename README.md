@@ -203,16 +203,20 @@ Being straight about the boundaries:
 
 ## Roadmap
 
-Rough order, no dates. Opinions welcome in issues.
+Rough order, no dates. Opinions welcome in the issues.
 
-- [ ] **Cashfree and PhonePe** — the obvious next gateways for the Indian market
-- [ ] **Quantity abuse** — negative and fractional quantities that subtract from a total
+- [ ] [**Cross-file tracing**](https://github.com/ANSHUL-REAL/moneypath/issues/1) — the
+      amount is followed within one file today, which is the single biggest source of
+      false negatives
+- [ ] [**Cashfree**](https://github.com/ANSHUL-REAL/moneypath/issues/2) — note it takes
+      rupees rather than paise, which inverts MP002
+- [ ] [**Express and Fastify**](https://github.com/ANSHUL-REAL/moneypath/issues/3) —
+      webhook detection currently assumes Next.js route shapes
+- [ ] [**Quantity abuse**](https://github.com/ANSHUL-REAL/moneypath/issues/4) — negative
+      and fractional quantities that subtract from a total
 - [ ] **Coupon logic** — client-applied discounts, and redemption with no server-side counter
 - [ ] **Idempotency** — webhook retries that double-credit a wallet
-- [ ] **Express and Fastify** — currently the route detection assumes Next.js shapes
-- [ ] **Cross-file tracing** — the amount is followed within one file today, which is the
-      single biggest source of false negatives
-- [ ] **PayPal, Paddle, Lemon Squeezy** — lower priority, different failure modes
+- [ ] **PhonePe, PayPal, Paddle, Lemon Squeezy** — lower priority, different failure modes
 
 Not planned: a general dataflow engine, a hosted dashboard, or a paid tier. If it grows
 past "one thing, done carefully" it stops being useful.
