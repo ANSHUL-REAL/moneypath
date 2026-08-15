@@ -242,6 +242,101 @@ describe('webhook signature', () => {
     `, '/app/api/webhooks/stripe/route.ts');
     expect(rules(found)).toEqual([]);
   });
+
+  it('flags an Express payment webhook with no verification', () => {
+    const found = analyze(`
+      import express from 'express';
+
+      const app = express();
+
+      app.post('/webhooks/razorpay', async (req, res) => {
+        const event = req.body;
+        await markOrderPaid(event.payload.payment.entity.notes.order_id);
+        res.json({ ok: true });
+      });
+    `, '/app/webhooks/razorpay.ts');
+
+    expect(rules(found)).toContain('MP006');
+  });
+
+  it('accepts an Express payment webhook with verification', () => {
+    const found = analyze(`
+      import express from 'express';
+      import crypto from 'node:crypto';
+
+      const app = express();
+
+      app.post('/webhooks/razorpay', async (req, res) => {
+        const event = req.body;
+        const signature = req.headers['x-razorpay-signature'];
+
+        const expected = crypto
+          .createHmac('sha256', 'secret')
+          .update(JSON.stringify(event))
+          .digest('hex');
+
+        if (expected !== signature) {
+          return res.status(400).json({ ok: false });
+        }
+
+        res.json({ ok: true });
+      });
+    `, '/app/webhooks/razorpay.ts');
+
+    expect(rules(found)).not.toContain('MP006');
+  });
+
+  it('flags a Fastify payment webhook with no verification', () => {
+    const found = analyze(`
+      import Fastify from 'fastify';
+
+      const fastify = Fastify();
+
+      fastify.post('/webhooks/razorpay', async (request, reply) => {
+        const event = request.body;
+        await markOrderPaid(event.payload.payment.entity.notes.order_id);
+        return reply.send({ ok: true });
+      });
+    `, '/app/webhooks/razorpay.ts');
+
+    expect(rules(found)).toContain('MP006');
+  });
+
+  it('flags a Fastify object-form payment webhook with no verification', () => {
+    const found = analyze(`
+      import Fastify from 'fastify';
+
+      const fastify = Fastify();
+
+      fastify.route({
+        method: 'POST',
+        url: '/webhooks/razorpay',
+        handler: async (request, reply) => {
+          const event = request.body;
+          await markOrderPaid(event.payload.payment.entity.notes.order_id);
+          return reply.send({ ok: true });
+        },
+      });
+    `, '/app/webhooks/razorpay.ts');
+
+    expect(rules(found)).toContain('MP006');
+  });
+
+  it('ignores a non-payment Express webhook', () => {
+    const found = analyze(`
+      import express from 'express';
+
+      const app = express();
+
+      app.post('/webhooks/github', async (req, res) => {
+        const event = req.body;
+        console.log(event);
+        res.json({ ok: true });
+      });
+    `, '/app/webhooks/github.ts');
+
+    expect(rules(found)).not.toContain('MP006');
+  });
 });
 
 describe('client-side confirmation', () => {
@@ -250,7 +345,7 @@ describe('client-side confirmation', () => {
       import { useSearchParams } from 'next/navigation';
       import { supabase } from './supabase';
       export default function Page() {
-        const searchParams = useSearchParams();
+        c~onst searchParams = useSearchParams();
         const id = searchParams.get('razorpay_order_id');
         void supabase.from('orders').update({ status: 'paid' }).eq('id', id);
         return null;

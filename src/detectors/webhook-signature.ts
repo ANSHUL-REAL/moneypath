@@ -27,20 +27,140 @@ function findAnchor(sf: SourceFile): Node {
  * vulnerable endpoint. Mentioning a header name is not the same as serving a
  * request.
  */
+/**
+ * Does a route registration expose an HTTP webhook handler?
+ *
+ * Supports:
+ *   app.post('/webhooks/razorpay', handler)
+ *   router.post('/webhooks/razorpay', handler)
+ *   app.use('/webhooks/razorpay', handler)
+ *   fastify.post('/webhooks/razorpay', handler)
+ *   fastify.route({
+ *     method: 'POST',
+ *     url: '/webhooks/razorpay',
+ *     handler,
+ *   })
+ */
+function hasRouteHandler(sf: SourceFile): boolean {
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+
+    if (!Node.isPropertyAccessExpression(expression)) continue;
+
+    const receiver = expression.getExpression().getText();
+    const method = expression.getName();
+
+    // Express / Router / Fastify:
+    // app.post('/webhooks/razorpay', ...)
+    // router.post('/webhooks/razorpay', ...)
+    // fastify.post('/webhooks/razorpay', ...)
+    if (
+      (receiver === 'app' ||
+        receiver === 'router' ||
+        receiver === 'fastify') &&
+      method === 'post'
+    ) {
+      const args = call.getArguments();
+
+      if (args.length < 2) continue;
+
+      const path = args[0];
+
+      if (Node.isStringLiteral(path) && /webhook/i.test(path.getLiteralValue())) {
+        return true;
+      }
+    }
+
+    // Express:
+    // app.use('/webhooks/razorpay', ...)
+    if (
+      (receiver === 'app' || receiver === 'router') &&
+      method === 'use'
+    ) {
+      const args = call.getArguments();
+
+      if (args.length < 2) continue;
+
+      const path = args[0];
+
+      if (Node.isStringLiteral(path) && /webhook/i.test(path.getLiteralValue())) {
+        return true;
+      }
+    }
+
+    // Fastify object form:
+    //
+    // fastify.route({
+    //   method: 'POST',
+    //   url: '/webhooks/razorpay',
+    //   handler,
+    // })
+    if (receiver === 'fastify' && method === 'route') {
+      const firstArg = call.getArguments()[0];
+
+      if (!firstArg || !Node.isObjectLiteralExpression(firstArg)) {
+        continue;
+      }
+
+      const methodProp = firstArg.getProperty('method');
+      const urlProp = firstArg.getProperty('url');
+      const handlerProp = firstArg.getProperty('handler');
+
+      if (
+        !methodProp ||
+        !urlProp ||
+        !handlerProp
+      ) {
+        continue;
+      }
+
+      const methodValue = Node.isPropertyAssignment(methodProp)
+        ? methodProp.getInitializer()
+        : undefined;
+
+      const urlValue = Node.isPropertyAssignment(urlProp)
+        ? urlProp.getInitializer()
+        : undefined;
+
+      if (
+        methodValue &&
+        Node.isStringLiteral(methodValue) &&
+        methodValue.getLiteralValue().toUpperCase() === 'POST' &&
+        urlValue &&
+        Node.isStringLiteral(urlValue) &&
+        /webhook/i.test(urlValue.getLiteralValue())
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function hasRequestHandler(sf: SourceFile): boolean {
   for (const fn of sf.getFunctions()) {
     if (!fn.isExported()) continue;
     if (fn.isDefaultExport()) return true;
+
     const name = fn.getName();
-    if (name && HANDLER_NAME_RE.test(name)) return true;
-  }
-  for (const statement of sf.getVariableStatements()) {
-    if (!statement.isExported()) continue;
-    for (const decl of statement.getDeclarations()) {
-      if (HANDLER_NAME_RE.test(decl.getName())) return true;
+
+    if (name && HANDLER_NAME_RE.test(name)) {
+      return true;
     }
   }
-  return false;
+
+  for (const statement of sf.getVariableStatements()) {
+    if (!statement.isExported()) continue;
+
+    for (const decl of statement.getDeclarations()) {
+      if (HANDLER_NAME_RE.test(decl.getName())) {
+        return true;
+      }
+    }
+  }
+
+  return hasRouteHandler(sf);
 }
 
 /** Does it read the incoming request body, as a real handler must? */
