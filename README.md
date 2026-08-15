@@ -25,19 +25,16 @@ No install, no account, no config, no network. It reads your source and exits.
 
 ## Why I built this
 
-I shipped a checkout that took the delivery fee from the browser. The server accepted
-whatever number arrived and passed it to Razorpay without a second thought. I found it
-months later, by accident, while reading unrelated code.
+I shipped a checkout that trusted the browser for the delivery fee. The server took
+whatever number arrived and handed it to Razorpay. Recomputing it server-side was a
+small fix — noticing it was the hard part.
 
-The fix was four lines. Finding it was luck.
+So I went looking for something that would have caught it, and there wasn't anything.
+Generic scanners see a valid POST with valid parameters and move on. Plenty of people
+will tell you not to trust the client; nobody had written the thing that checks whether
+you did.
 
-That bothered me more than the bug did. I went looking for something that would have
-caught it and there wasn't anything — the scanners I tried saw a valid POST with valid
-parameters and moved on. Plenty of people will tell you not to trust the client. Nobody
-had written the thing that checks.
-
-So: this. It is narrow on purpose. It does one class of bug and tries to do it without
-lying to you.
+So: this. Narrow on purpose — one class of bug, done without lying to you.
 
 ## Why generic scanners miss this
 
