@@ -74,7 +74,7 @@ If `node dist/cli.js src` reports anything, a rule is matching on prose.
 
 ## Conventions
 
-- CommonJS output, Node 18+. Do not introduce ESM-only dependencies.
+- CommonJS output, Node 20+. Do not introduce ESM-only dependencies.
 - Two runtime dependencies (`ts-morph`, `picocolors`). Adding a third needs a real reason.
 - The analysis is syntactic on purpose: no type checker, no `node_modules` resolution, so
   it runs on projects that have never been installed.

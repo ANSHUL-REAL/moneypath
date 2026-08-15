@@ -5,6 +5,20 @@ published, and removing or renaming one is a breaking change.
 
 ## [Unreleased]
 
+### Security
+
+- Upgraded vitest from 2.x to 4.x, clearing five advisories in the transitive
+  vite/esbuild chain (one critical, one high, three moderate). All were
+  devDependencies, so no published version of moneypath was affected: the package
+  ships with `ts-morph` and `picocolors` only.
+
+### Changed
+
+- **Minimum Node is now 20.** vitest 4 requires `^20 || ^22 || >=24`, so Node 18 can no
+  longer be tested. Rather than claim support that CI does not exercise, 18 is dropped.
+  It went end of life in April 2025. The CI matrix is now 20, 22 and 24.
+- Added a security policy and enabled private vulnerability reporting.
+
 ## [0.1.1] — 2026-08-15
 
 ### Changed
