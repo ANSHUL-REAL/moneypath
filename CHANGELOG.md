@@ -5,6 +5,14 @@ published, and removing or renaming one is a breaking change.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-15
+
+Adds a gateway, a rule, and cross-file tracing. Also fixes three false positives that
+were present in 0.1.x, so upgrading is worth it even if you use none of the new
+features.
+
+**Minimum Node is now 20.** See below.
+
 ### Fixed
 
 - **MP005 fired on ordinary React state.** The mutation check matched method names as
