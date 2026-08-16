@@ -152,4 +152,36 @@ describe('false positives on correct code', () => {
       `, '/test/factories.ts'),
     ).toEqual([]);
   });
+
+  // Route detection stopped checking the receiver name, because `server`, `api`
+  // and `expressApp` are as ordinary as `app`. That leaves the call shape doing
+  // the work, and `axios.post(url, body)` has the same shape as
+  // `app.post(path, handler)`. What separates them is that a registration is a
+  // discarded statement while a client call is awaited or assigned.
+  it('MP006: a relay that forwards events to a webhook URL', () => {
+    expect(
+      analyze(`
+        import axios from 'axios';
+        import Razorpay from 'razorpay';
+        export async function forward(req) {
+          const raw = req.body;
+          await axios.post('/webhooks/razorpay', raw);
+        }
+      `, '/src/relay.ts'),
+    ).toEqual([]);
+  });
+
+  it('MP006: a replay script whose client response is assigned', () => {
+    expect(
+      analyze(`
+        import Razorpay from 'razorpay';
+        import { client } from './client';
+        export async function replay(req) {
+          const raw = req.body;
+          const response = await client.post('/webhooks/razorpay', raw);
+          return response;
+        }
+      `, '/src/replay.ts'),
+    ).toEqual([]);
+  });
 });
