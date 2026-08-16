@@ -1,6 +1,11 @@
 import { Project, ts, type SourceFile } from 'ts-morph';
 import { toRelative } from './analysis/ast';
 import { findPaymentSinks, getGatewayContext } from './analysis/sinks';
+import {
+  collectSinkWrappers,
+  findCrossFileFindings,
+  type SinkWrapper,
+} from './analysis/wrappers';
 import { clientAmountDetector } from './detectors/client-amount';
 import { clientConfirmationDetector } from './detectors/client-confirmation';
 import { currencyUnitDetector } from './detectors/currency-units';
@@ -59,12 +64,19 @@ function createProject(): Project {
   });
 }
 
-function analyzeFile(sourceFile: SourceFile, cwd: string): { findings: Finding[]; hasGateway: boolean; sinkCount: number } {
+interface FileAnalysis {
+  findings: Finding[];
+  hasGateway: boolean;
+  sinkCount: number;
+  wrappers: SinkWrapper[];
+}
+
+function analyzeFile(sourceFile: SourceFile, cwd: string): FileAnalysis {
   const relPath = toRelative(sourceFile.getFilePath(), cwd);
   const gateways = getGatewayContext(sourceFile);
 
   if (gateways.size === 0) {
-    return { findings: [], hasGateway: false, sinkCount: 0 };
+    return { findings: [], hasGateway: false, sinkCount: 0, wrappers: [] };
   }
 
   const sinks = findPaymentSinks(sourceFile);
@@ -80,7 +92,28 @@ function analyzeFile(sourceFile: SourceFile, cwd: string): { findings: Finding[]
     }
   }
 
-  return { findings, hasGateway: true, sinkCount: sinks.length };
+  let wrappers: SinkWrapper[] = [];
+  try {
+    wrappers = collectSinkWrappers(sourceFile, relPath);
+  } catch {
+    // Same reasoning: a wrapper we fail to record is a missed finding, not a
+    // failed scan.
+  }
+
+  return { findings, hasGateway: true, sinkCount: sinks.length, wrappers };
+}
+
+/** Drop duplicates when a local and a cross-file pass land on the same spot. */
+function dedupe(findings: Finding[]): Finding[] {
+  const seen = new Set<string>();
+  const unique: Finding[] = [];
+  for (const finding of findings) {
+    const key = `${finding.rule}|${finding.file}|${finding.line}|${finding.column}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(finding);
+  }
+  return unique;
 }
 
 export function scan(options: ScanOptions): ScanResult {
@@ -94,20 +127,34 @@ export function scan(options: ScanOptions): ScanResult {
   const sourceFiles = project.getSourceFiles().slice(0, maxFiles);
 
   const findings: Finding[] = [];
+  const wrappers: SinkWrapper[] = [];
   let gatewayFiles = 0;
   let totalSinks = 0;
 
+  // Pass one: per-file detectors, and record any exported function that feeds
+  // a parameter straight into a gateway call.
   for (const sourceFile of sourceFiles) {
     const result = analyzeFile(sourceFile, cwd);
     findings.push(...result.findings);
+    wrappers.push(...result.wrappers);
     if (result.hasGateway) gatewayFiles += 1;
     totalSinks += result.sinkCount;
   }
 
-  findings.sort(compareFindings);
+  // Pass two: check what callers actually pass into those wrappers. This is
+  // the only part of the analysis that looks across file boundaries.
+  try {
+    findings.push(...findCrossFileFindings(sourceFiles, wrappers, cwd));
+  } catch {
+    // Cross-file tracing is an enhancement over the per-file result. If it
+    // fails, the per-file findings still stand.
+  }
+
+  const unique = dedupe(findings);
+  unique.sort(compareFindings);
 
   return {
-    findings,
+    findings: unique,
     filesScanned: sourceFiles.length,
     durationMs: Date.now() - started,
     noPaymentCodeFound: gatewayFiles === 0 && totalSinks === 0,

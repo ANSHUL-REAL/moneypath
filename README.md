@@ -194,6 +194,11 @@ Being straight about the boundaries:
 
 - It is **syntactic**, not a full dataflow engine. It follows a value about four hops
   and stops. Deeply indirected code will be missed.
+- **Cross-file tracing is narrow.** If you wrap the gateway call in a helper, moneypath
+  follows the amount from the caller into that helper and reports at the call site. It
+  does this by matching the exported function name and checking the caller imports it,
+  not by resolving modules properly, so a wrapper reached through a class method, an
+  object property, or a re-export is still missed.
 - It only knows **Razorpay and Stripe**. PayPal, Paddle, Lemon Squeezy, Cashfree and
   PhonePe are not covered yet.
 - It does **not** replace a security review, a pentest, or reading your own checkout.
@@ -205,9 +210,9 @@ Being straight about the boundaries:
 
 Rough order, no dates. Opinions welcome in the issues.
 
-- [ ] [**Cross-file tracing**](https://github.com/ANSHUL-REAL/moneypath/issues/1) — the
-      amount is followed within one file today, which is the single biggest source of
-      false negatives
+- [x] [**Cross-file tracing**](https://github.com/ANSHUL-REAL/moneypath/issues/1) — done
+      for the common case: an amount passed into an exported wrapper that calls the
+      gateway. Module-path resolution and method-call wrappers are still open.
 - [ ] [**Cashfree**](https://github.com/ANSHUL-REAL/moneypath/issues/2) — note it takes
       rupees rather than paise, which inverts MP002
 - [ ] [**Express and Fastify**](https://github.com/ANSHUL-REAL/moneypath/issues/3) —

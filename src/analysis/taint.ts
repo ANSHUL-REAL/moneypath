@@ -73,7 +73,7 @@ function short(text: string, max = 72): string {
  * `product.price` only `product` is resolvable, and treating `price` as a
  * variable would let an unrelated local of the same name hijack the trace.
  */
-function resolvableIdentifiers(node: Node): string[] {
+export function resolvableIdentifiers(node: Node): string[] {
   const names = new Set<string>();
 
   const consider = (id: Node): void => {
@@ -100,7 +100,7 @@ function resolvableIdentifiers(node: Node): string[] {
  * needs installed dependencies and a real tsconfig, neither of which can be
  * assumed when someone runs this against a half-finished project.
  */
-function findBoundValue(name: string, from: Node): Node | undefined {
+export function findBoundValue(name: string, from: Node): Node | undefined {
   const sf = from.getSourceFile();
   const pos = from.getStart();
   const candidates: Node[] = [];

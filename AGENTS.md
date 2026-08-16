@@ -29,6 +29,8 @@ src/
     ast.ts       location helpers, property lookup, identifier extraction
     sinks.ts     finds payment gateway calls (the "sinks")
     taint.ts     backward tracer: does this value come from the client?
+    wrappers.ts  cross-file: exported functions that feed a parameter to a sink,
+                 and what their callers pass in
   detectors/
     client-amount.ts        MP001
     currency-units.ts       MP002, MP003, MP004

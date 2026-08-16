@@ -5,6 +5,21 @@ published, and removing or renaming one is a breaking change.
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-file tracing for MP001** ([#1](https://github.com/ANSHUL-REAL/moneypath/issues/1)).
+  Wrapping the gateway call in a helper is how most projects are laid out, and it hid
+  the bug completely: the file with the sink sees only a parameter, and the route
+  calling it contains no sink at all. The scan now runs a second pass that records
+  exported functions feeding a parameter straight into a gateway call, then checks what
+  callers pass in. Findings are anchored at the call site, where the fix belongs, and
+  the trace spans both files.
+
+  Deliberately narrow. Wrappers are matched by exported name plus an import check in the
+  calling file rather than by resolving module paths, and two exported functions sharing
+  a name are dropped rather than guessed at. These findings are reported as `review`,
+  never `confirmed`, because the chain crosses a boundary resolved by name.
+
 ### Security
 
 - Upgraded vitest from 2.x to 4.x, clearing five advisories in the transitive

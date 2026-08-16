@@ -40,7 +40,10 @@ deliberately prefers false negatives over false positives.
 
 ## Scope limits
 
-Syntactic analysis, roughly four hops of backward tracing. Razorpay and Stripe only.
+Syntactic analysis, roughly four hops of backward tracing. Traces across files only for
+the common wrapper case: an amount passed into an exported function that calls the
+gateway, matched by name plus an import check rather than real module resolution.
+Razorpay and Stripe only.
 Finds logic flaws, not injection, XSS, or dependency vulnerabilities. A clean run means
 these six specific bugs are absent, not that the checkout is secure.
 
