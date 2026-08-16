@@ -62,12 +62,17 @@ jobs:
             exit 1
           fi
 
+      # Fatal for a real publish, a note for a dry run, so the pipeline stays
+      # rehearsable against whatever version is currently released.
       - name: Refuse to publish a version that already exists
         run: |
           PKG=$(node -p "require('./package.json').version")
           if npm view "moneypath@$PKG" version >/dev/null 2>&1; then
-            echo "::error::moneypath@$PKG is already on the registry. Bump the version."
-            exit 1
+            if [ "${{ github.event_name }}" = "release" ] || [ "${{ inputs.dry_run }}" = "false" ]; then
+              echo "::error::moneypath@$PKG is already on the registry. Bump the version."
+              exit 1
+            fi
+            echo "::notice::moneypath@$PKG already exists. A real publish would stop here."
           fi
 
       - run: npm run typecheck
