@@ -58,6 +58,11 @@ test/fixtures/safe/   correct implementations — nothing may fire here
    directory produces zero findings. This is the important step.
 6. Add unit cases to `test/units.test.ts` covering the boundary — especially the nearby
    correct code the rule must not touch.
+7. Attack it. Write ordinary, correct code that the rule might wrongly match, and put
+   anything that fires in `test/false-positives.test.ts`. Every case in that file was a
+   real false positive found this way, not one imagined in advance. Substring matching
+   on identifier names is the recurring culprit: "set" matches `setOrder`, "patch"
+   matches `dispatch`, "put" matches `input`.
 
 ## Verifying
 

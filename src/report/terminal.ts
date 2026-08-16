@@ -35,6 +35,19 @@ export function renderTerminal(result: ScanResult, options: TerminalOptions): st
   );
   out.push('');
 
+  if (result.filesSkipped > 0) {
+    // A partial scan reported as a clean result is worse than no scan.
+    out.push(
+      `  ${c.yellow('!')} ${c.yellow(
+        `${result.filesSkipped} files were not scanned (file limit reached).`,
+      )}`,
+    );
+    out.push(
+      `    ${c.dim('This result is incomplete. Scan a subdirectory, or raise maxFiles.')}`,
+    );
+    out.push('');
+  }
+
   if (result.noPaymentCodeFound) {
     out.push(`  ${c.dim('No Razorpay or Stripe usage found in this project.')}`);
     out.push(

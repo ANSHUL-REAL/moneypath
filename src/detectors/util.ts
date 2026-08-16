@@ -54,12 +54,30 @@ export function buildFinding(input: FindingInput): Finding {
   return finding;
 }
 
-/** Calls that verify a payment actually happened, in any of the common SDK spellings. */
-export const VERIFICATION_RE =
+/** Verification in the common SDK spellings, plus the raw crypto primitives. */
+const SDK_VERIFICATION_RE =
   /validateWebhookSignature|verifyPaymentSignature|verifyWebhookSignature|constructEvent|constructEventAsync|createHmac|timingSafeEqual|new\s+Webhook\s*\(/;
 
+/**
+ * A call to a locally named verification helper.
+ *
+ * Extracting signature checking into `verifyRazorpaySignature()` or
+ * `assertWebhookSignature()` is good practice, and matching only the SDK
+ * spellings punished exactly the people who did it. Requires a call, so prose
+ * about verifying signatures does not count.
+ *
+ * This will also accept a badly named function that does not really verify
+ * anything, which is a false negative accepted on purpose: wrongly accusing a
+ * correct webhook costs more than missing a misleadingly named one.
+ */
+const HELPER_VERIFICATION_RE =
+  /\b\w*(?:verif|valid|check|assert|ensure)\w*(?:signature|webhook|hmac)\w*\s*\(|\b\w*(?:signature|webhook|hmac)\w*(?:verif|valid|check)\w*\s*\(/i;
+
+export const VERIFICATION_RE = SDK_VERIFICATION_RE;
+
 export function hasVerification(sf: SourceFile): boolean {
-  return VERIFICATION_RE.test(sf.getFullText());
+  const text = sf.getFullText();
+  return SDK_VERIFICATION_RE.test(text) || HELPER_VERIFICATION_RE.test(text);
 }
 
 /** Property names that carry an order's paid/unpaid state. */
@@ -106,16 +124,55 @@ export function findPaidStatusWrites(sf: SourceFile): StatusWrite[] {
   return writes;
 }
 
-const MUTATION_CALLEE_RE =
-  /(update|insert|upsert|create|save|set|patch|put|post|write|edit|modify)/i;
+/**
+ * Method names that persist a change.
+ *
+ * Matched exactly against the final segment of the callee, never as a
+ * substring. Substring matching flagged `setOrder` and `setPlan` because they
+ * contain "set", and `dispatch` because it contains "patch", turning ordinary
+ * React state into a reported payment confirmation. `input` contains "put" and
+ * `createElement` contains "create", so the loose form had plenty of room left
+ * to be wrong.
+ */
+const MUTATION_METHODS = new Set([
+  'update',
+  'updateone',
+  'updatemany',
+  'insert',
+  'insertone',
+  'upsert',
+  'create',
+  'save',
+  'set',
+  'patch',
+  'put',
+  'post',
+  'write',
+  'edit',
+  'modify',
+  'findoneandupdate',
+  'findbyidandupdate',
+]);
+
+/** The callee's final segment: `prisma.order.update` gives `update`. */
+function calleeMethodName(call: Node): string | null {
+  if (!Node.isCallExpression(call)) return null;
+  const expression = call.getExpression();
+  if (Node.isPropertyAccessExpression(expression)) return expression.getName();
+  if (Node.isIdentifier(expression)) return expression.getText();
+  return null;
+}
 
 function isInsideMutationCall(node: Node): boolean {
   const call = node.getFirstAncestorByKind(SyntaxKind.CallExpression);
   if (!call) return false;
-  const callee = call.getExpression().getText();
-  if (MUTATION_CALLEE_RE.test(callee)) return true;
+
+  const method = calleeMethodName(call);
+  if (!method) return false;
+  if (MUTATION_METHODS.has(method.toLowerCase())) return true;
+
   // `fetch('/api/x', { method: 'POST', body: ... })` shaped writes.
-  return /^fetch$/.test(callee) && /POST|PUT|PATCH/i.test(call.getText());
+  return method === 'fetch' && /POST|PUT|PATCH/i.test(call.getText());
 }
 
 /** Redirect/callback parameters a browser can forge. */

@@ -5,6 +5,24 @@ published, and removing or renaming one is a breaking change.
 
 ## [Unreleased]
 
+### Fixed
+
+- **MP005 fired on ordinary React state.** The mutation check matched method names as
+  substrings, so `setOrder(...)` and `setPlan(...)` matched on "set" and `dispatch(...)`
+  matched on "patch". It would also have matched `input`, `asset` and `createElement`.
+  Method names are now matched exactly against the final segment of the callee.
+- **MP006 fired on webhooks that verify correctly.** Only the SDK spellings and raw
+  crypto primitives counted as verification, so extracting the check into
+  `verifyRazorpaySignature()` or `assertWebhookSignature()` was reported as an
+  unverified webhook. That punished the people doing the right thing. Locally named
+  verification helpers now count.
+- **Scans silently truncated at 5000 files.** A large monorepo produced a partial result
+  presented as a complete one, which on a security tool is worse than no result at all.
+  `ScanResult` now carries `filesSkipped`, and both the terminal and HTML reports say
+  plainly that the scan was incomplete.
+- `renderSarif` and `GATEWAY_USES_MINOR_UNIT` were missing from the public API, so
+  programmatic users could not produce SARIF even though the CLI could.
+
 ### Added
 
 - **Cashfree support** ([#2](https://github.com/ANSHUL-REAL/moneypath/issues/2)), with the

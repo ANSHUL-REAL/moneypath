@@ -72,6 +72,13 @@ export interface ScanOptions {
 export interface ScanResult {
   findings: Finding[];
   filesScanned: number;
+  /**
+   * Files matched but not analyzed because `maxFiles` was reached.
+   *
+   * Surfaced rather than swallowed: a partial scan reported as a clean result
+   * is worse than no scan, because it is believed.
+   */
+  filesSkipped: number;
   durationMs: number;
   /** True when no payment SDK call sites were found at all. */
   noPaymentCodeFound: boolean;

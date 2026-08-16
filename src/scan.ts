@@ -124,7 +124,9 @@ export function scan(options: ScanOptions): ScanResult {
   const project = createProject();
   project.addSourceFilesAtPaths(buildGlobs(cwd, options.ignore ?? []));
 
-  const sourceFiles = project.getSourceFiles().slice(0, maxFiles);
+  const matched = project.getSourceFiles();
+  const sourceFiles = matched.slice(0, maxFiles);
+  const filesSkipped = matched.length - sourceFiles.length;
 
   const findings: Finding[] = [];
   const wrappers: SinkWrapper[] = [];
@@ -156,6 +158,7 @@ export function scan(options: ScanOptions): ScanResult {
   return {
     findings: unique,
     filesScanned: sourceFiles.length,
+    filesSkipped,
     durationMs: Date.now() - started,
     noPaymentCodeFound: gatewayFiles === 0 && totalSinks === 0,
   };

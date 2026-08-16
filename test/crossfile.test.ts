@@ -54,3 +54,18 @@ describe('cross-file tracing', () => {
     expect(rendered).toBe('');
   });
 });
+
+describe('an incomplete scan says so', () => {
+  it('reports how many files were skipped when the cap is hit', () => {
+    // A partial scan presented as a clean result is worse than no scan,
+    // because it gets believed.
+    const result = scan({ cwd: fixture('vulnerable'), maxFiles: 1 });
+    expect(result.filesScanned).toBe(1);
+    expect(result.filesSkipped).toBe(1);
+  });
+
+  it('reports nothing skipped on a normal scan', () => {
+    const result = scan({ cwd: fixture('vulnerable') });
+    expect(result.filesSkipped).toBe(0);
+  });
+});

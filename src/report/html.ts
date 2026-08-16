@@ -117,6 +117,12 @@ export function renderHtml(result: ScanResult, projectName: string): string {
   }
   .fix .label { color: var(--ok); }
   code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  .warn {
+    margin-top: 14px; padding: 12px 16px; border-radius: 8px; font-size: 13.5px;
+    background: color-mix(in srgb, var(--high) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--high) 45%, transparent);
+    color: var(--text);
+  }
   .clean { text-align: center; padding: 60px 20px; color: var(--muted); }
   .clean .big { font-size: 40px; margin-bottom: 12px; }
   footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; }
@@ -134,6 +140,11 @@ export function renderHtml(result: ScanResult, projectName: string): string {
     <div class="meta">${esc(projectName)}</div>
   </header>
   <div class="meta">${result.filesScanned} files scanned in ${result.durationMs}ms</div>
+  ${
+    result.filesSkipped > 0
+      ? `<div class="warn"><b>Incomplete scan.</b> ${result.filesSkipped} files were not analyzed because the file limit was reached. Scan a subdirectory, or raise <code>maxFiles</code>.</div>`
+      : ''
+  }
 
   <div class="verdict" style="--verdict-color: ${verdict.color}">
     <h1>${esc(verdict.headline)}</h1>
