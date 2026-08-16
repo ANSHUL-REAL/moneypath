@@ -1,0 +1,105 @@
+name: Publish
+
+# Cutting a GitHub release publishes to npm. Nothing is published from a
+# laptop, so there is no expiring login and no OTP prompt, and every tarball
+# carries provenance tying it to the commit it was built from.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run every check and pack the tarball, but do not publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance. Without it the publish still works but
+      # the package ships unsigned, so the whole point is lost.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      # Only required when actually publishing, so a dry run can exercise the
+      # whole pipeline before the secret exists.
+      - name: Fail early if the token is missing
+        if: github.event_name == 'release' || inputs.dry_run == false
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Create an Automation token on npmjs.com and add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      # A tag that disagrees with package.json publishes the wrong version
+      # under the right name, which cannot be undone.
+      - name: Check the tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "package.json: $PKG"
+          echo "tag:          $TAG"
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::package.json is $PKG but the release tag is $TAG. Bump the version and move the tag before releasing."
+            exit 1
+          fi
+
+      - name: Refuse to publish a version that already exists
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          if npm view "moneypath@$PKG" version >/dev/null 2>&1; then
+            echo "::error::moneypath@$PKG is already on the registry. Bump the version."
+            exit 1
+          fi
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:mcp
+
+      - name: Self-scan must stay clean
+        run: node dist/cli.js src
+
+      - name: The vulnerable example must still trip the scanner
+        run: |
+          if node dist/cli.js examples/badcart --no-color; then
+            echo "::error::badcart produced no findings, so a detector has regressed. Not publishing."
+            exit 1
+          fi
+
+      - name: Pack and show what would ship
+        run: npm pack --dry-run
+
+      - name: Publish with provenance
+        if: github.event_name == 'release' || inputs.dry_run == false
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          if [ "${{ github.event_name }}" = "release" ] || [ "${{ inputs.dry_run }}" = "false" ]; then
+            echo "Published moneypath@$PKG" >> "$GITHUB_STEP_SUMMARY"
+            echo "https://www.npmjs.com/package/moneypath/v/$PKG" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Dry run for moneypath@$PKG. All checks passed, nothing published." >> "$GITHUB_STEP_SUMMARY"
+          fi

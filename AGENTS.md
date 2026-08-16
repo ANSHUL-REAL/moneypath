@@ -79,6 +79,32 @@ length, which has already caused one false positive (a detector file was flagged
 vulnerable webhook because it contained the string `razorpay_signature` in advice text).
 If `node dist/cli.js src` reports anything, a rule is matching on prose.
 
+## Releasing
+
+Publishing happens in CI, never from a laptop. `.github/workflows/publish.yml` runs on a
+published GitHub release and publishes with `--provenance`, so each tarball is tied to
+the commit it was built from.
+
+One-time setup: create an **Automation** token on npmjs.com (Access Tokens > Generate >
+Automation), and add it to the repo as the `NPM_TOKEN` secret. Automation tokens bypass
+2FA by design, which is what makes an unattended publish possible.
+
+To cut a release:
+
+```bash
+npm version minor -m "Release v%s"   # or patch / major
+git push --follow-tags
+gh release create vX.Y.Z --title "vX.Y.Z" --notes-file notes.md --latest
+```
+
+The workflow refuses to publish if the tag disagrees with `package.json`, if the version
+already exists on the registry, if any check fails, if the self-scan reports anything, or
+if `examples/badcart` stops producing findings. That last one catches a detector silently
+disabled.
+
+To rehearse without publishing, run the workflow manually with `dry_run` left true. It
+does everything except the publish step and does not need the token.
+
 ## Conventions
 
 - CommonJS output, Node 20+. Do not introduce ESM-only dependencies.
