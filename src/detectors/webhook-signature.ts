@@ -54,11 +54,12 @@ function hasRouteHandler(sf: SourceFile): boolean {
     // app.post('/webhooks/razorpay', ...)
     // router.post('/webhooks/razorpay', ...)
     // fastify.post('/webhooks/razorpay', ...)
+    const normalizedMethod = method.toLowerCase();
+
     if (
-      (receiver === 'app' ||
-        receiver === 'router' ||
-        receiver === 'fastify') &&
-      method === 'post'
+      normalizedMethod === 'post' ||
+      normalizedMethod === 'use' ||
+      normalizedMethod === 'all'
     ) {
       const args = call.getArguments();
 
@@ -66,24 +67,10 @@ function hasRouteHandler(sf: SourceFile): boolean {
 
       const path = args[0];
 
-      if (Node.isStringLiteral(path) && /webhook/i.test(path.getLiteralValue())) {
-        return true;
-      }
-    }
-
-    // Express:
-    // app.use('/webhooks/razorpay', ...)
-    if (
-      (receiver === 'app' || receiver === 'router') &&
-      method === 'use'
-    ) {
-      const args = call.getArguments();
-
-      if (args.length < 2) continue;
-
-      const path = args[0];
-
-      if (Node.isStringLiteral(path) && /webhook/i.test(path.getLiteralValue())) {
+      if (
+        Node.isStringLiteral(path) &&
+        /webhook/i.test(path.getLiteralValue())
+      ) {
         return true;
       }
     }
@@ -95,7 +82,7 @@ function hasRouteHandler(sf: SourceFile): boolean {
     //   url: '/webhooks/razorpay',
     //   handler,
     // })
-    if (receiver === 'fastify' && method === 'route') {
+    if (normalizedMethod === 'route') {
       const firstArg = call.getArguments()[0];
 
       if (!firstArg || !Node.isObjectLiteralExpression(firstArg)) {
@@ -193,11 +180,12 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
 
   // Three independent signals must agree before this fires: it is named or
   // shaped like a webhook, it serves requests, and it consumes the body.
-  const looksLikeWebhook = /webhook/i.test(ctx.relPath) || SIGNATURE_HEADER_RE.test(text);
+  const hasWebhookRoute = hasRouteHandler(sf);
+  const looksLikeWebhook = /webhook/i.test(ctx.relPath) || SIGNATURE_HEADER_RE.test(text) || hasWebhookRoute;
+
   if (!looksLikeWebhook) return [];
   if (!hasRequestHandler(sf)) return [];
   if (!readsRequestBody(sf)) return [];
-
   if (hasVerification(sf)) return [];
 
   const gateway = pickGateway(gateways, text);

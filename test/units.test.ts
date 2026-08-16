@@ -204,15 +204,24 @@ describe('scope guards', () => {
 });
 
 describe('webhook signature', () => {
-  it('flags a payment webhook with no verification', () => {
+  it('flags a payment webhook registered in server.ts', () => {
     const found = analyze(`
+      import express from 'express';
+      import Razorpay from 'razorpay';
       import { prisma } from './db';
-      export async function POST(request: Request) {
-        const event = await request.json();
-        await prisma.order.update({ where: { id: event.id }, data: { status: 'paid' } });
-        return Response.json({ ok: true });
-      }
-    `, '/app/api/webhooks/razorpay/route.ts');
+
+      const app = express();
+      const razorpay = new Razorpay({ key_id: 'k', key_secret: 's' });
+
+      app.post('/webhooks/razorpay', async (req, res) => {
+        const event = req.body;
+
+        await prisma.order.update({ where: { id: event.id }, data: { status: 'paid' }, });
+
+        res.json({ ok: true });
+      });
+    `, '/src/server.ts');
+
     expect(rules(found)).toContain('MP006');
   });
 
@@ -337,6 +346,56 @@ describe('webhook signature', () => {
 
     expect(rules(found)).not.toContain('MP006');
   });
+
+  it('ignores a payment route that is not a webhook', () => {
+    const found = analyze(`
+      import express from 'express';
+      import Razorpay from 'razorpay';
+
+      const server = express();
+      const razorpay = new Razorpay({ key_id: 'k', key_secret: 's' });
+
+      server.post('/payments/capture', async (req, res) => {
+        const event = req.body;
+        await markOrderPaid(event.id);
+        res.json({ ok: true });
+      });
+    `, '/src/server.ts');
+
+    expect(rules(found)).not.toContain('MP006');
+  });
+
+  it('flags an uppercase POST payment webhook', () => {
+    const found = analyze(`
+      import express from 'express';
+
+      const server = express();
+
+      server.POST('/webhooks/razorpay', async (req, res) => {
+        const event = req.body;
+        await markOrderPaid(event.id);
+        res.json({ ok: true });
+      });
+    `, '/src/server.ts');
+
+    expect(rules(found)).toContain('MP006');
+  });
+
+  it('flags an ALL payment webhook', () => {
+    const found = analyze(`
+      import express from 'express';
+
+      const server = express();
+
+      server.all('/webhooks/razorpay', async (req, res) => {
+        const event = req.body;
+        await markOrderPaid(event.id);
+        res.json({ ok: true });
+      });
+    `, '/src/server.ts');
+
+    expect(rules(found)).toContain('MP006');
+  });
 });
 
 describe('client-side confirmation', () => {
@@ -345,7 +404,7 @@ describe('client-side confirmation', () => {
       import { useSearchParams } from 'next/navigation';
       import { supabase } from './supabase';
       export default function Page() {
-        c~onst searchParams = useSearchParams();
+        const searchParams = useSearchParams();
         const id = searchParams.get('razorpay_order_id');
         void supabase.from('orders').update({ status: 'paid' }).eq('id', id);
         return null;
@@ -362,5 +421,21 @@ describe('client-side confirmation', () => {
       }
     `, '/components/badge.tsx');
     expect(rules(found)).toEqual([]);
+  });
+
+  it('flags a webhook when the receiver has a common custom name', () => {
+    const found = analyze(`
+      import express from 'express';
+
+      const server = express();
+
+      server.post('/webhooks/razorpay', async (req, res) => {
+        const event = req.body;
+        await markOrderPaid(event.payload.payment.entity.notes.order_id);
+        res.json({ ok: true });
+      });
+    `, '/src/server.ts');
+
+    expect(rules(found)).toContain('MP006');
   });
 });
