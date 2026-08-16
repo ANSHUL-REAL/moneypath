@@ -1,11 +1,26 @@
-import { CallExpression, Node, SourceFile, SyntaxKind } from 'ts-morph';
+import {
+  CallExpression,
+  Node,
+  ObjectLiteralExpression,
+  SourceFile,
+  SyntaxKind,
+} from 'ts-morph';
 import type { Gateway } from '../types';
 import { findNestedPropertyValue, getPropertyValue } from './ast';
+
+/** The property each gateway expects the charged amount in. */
+const AMOUNT_PROP: Record<SinkKind, string> = {
+  'razorpay-order': 'amount',
+  'stripe-payment-intent': 'amount',
+  'stripe-checkout-session': 'unit_amount',
+  'cashfree-order': 'order_amount',
+};
 
 export type SinkKind =
   | 'razorpay-order'
   | 'stripe-payment-intent'
-  | 'stripe-checkout-session';
+  | 'stripe-checkout-session'
+  | 'cashfree-order';
 
 export interface PaymentSink {
   gateway: Gateway;
@@ -34,6 +49,7 @@ export function getGatewayContext(sf: SourceFile): Set<Gateway> {
   const gateways = new Set<Gateway>();
   if (haystack.includes('razorpay')) gateways.add('razorpay');
   if (haystack.includes('stripe')) gateways.add('stripe');
+  if (haystack.includes('cashfree')) gateways.add('cashfree');
   return gateways;
 }
 
@@ -45,9 +61,12 @@ export function findPaymentSinks(sf: SourceFile): PaymentSink[] {
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const callee = call.getExpression().getText().replace(/\s+/g, '');
-    const firstArg = call.getArguments()[0];
-    const options =
-      firstArg && Node.isObjectLiteralExpression(firstArg) ? firstArg : undefined;
+
+    // Take the first object literal among the arguments rather than argument
+    // zero: older Cashfree SDKs put an API version string first.
+    const options = call
+      .getArguments()
+      .find((arg): arg is ObjectLiteralExpression => Node.isObjectLiteralExpression(arg));
 
     let kind: SinkKind | undefined;
     let gateway: Gateway | undefined;
@@ -61,17 +80,20 @@ export function findPaymentSinks(sf: SourceFile): PaymentSink[] {
     } else if (/(^|\.)sessions\.create$/.test(callee) && context.has('stripe')) {
       kind = 'stripe-checkout-session';
       gateway = 'stripe';
+    } else if (/(^|\.)PGCreateOrder$/.test(callee) && context.has('cashfree')) {
+      kind = 'cashfree-order';
+      gateway = 'cashfree';
     }
 
     if (!kind || !gateway) continue;
 
-    const amountProp = kind === 'stripe-checkout-session' ? 'unit_amount' : 'amount';
+    const amountProp = AMOUNT_PROP[kind];
     let amountNode: Node | undefined;
     if (options) {
       amountNode =
         kind === 'stripe-checkout-session'
-          ? findNestedPropertyValue(options, 'unit_amount')
-          : getPropertyValue(options, 'amount');
+          ? findNestedPropertyValue(options, amountProp)
+          : getPropertyValue(options, amountProp);
     }
 
     sinks.push({ gateway, kind, call, amountNode, amountProp, options });

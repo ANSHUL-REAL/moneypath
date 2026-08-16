@@ -64,7 +64,12 @@ setTimeout(() => {
     failures.push('scan returned no content');
   } else {
     const parsed = JSON.parse(payload);
-    if (parsed.findings.length !== 6) failures.push(`scan found ${parsed.findings.length} findings, expected 6`);
+    // Assert coverage rather than a count, so adding a fixture to badcart does
+    // not break the protocol smoke test.
+    const rules = new Set(parsed.findings.map((f) => f.rule));
+    for (const expected of ['MP001', 'MP002', 'MP003', 'MP004', 'MP005', 'MP006', 'MP007']) {
+      if (!rules.has(expected)) failures.push(`scan did not report ${expected}`);
+    }
     if (!parsed.summary.includes('critical')) failures.push('scan summary missing severity counts');
   }
 

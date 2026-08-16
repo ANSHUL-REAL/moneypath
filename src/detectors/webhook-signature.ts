@@ -3,7 +3,8 @@ import type { Finding, Gateway } from '../types';
 import { getGatewayContext } from '../analysis/sinks';
 import { buildFinding, hasVerification, type Detector } from './util';
 
-const SIGNATURE_HEADER_RE = /x-razorpay-signature|stripe-signature|razorpay_signature/i;
+const SIGNATURE_HEADER_RE =
+  /x-razorpay-signature|stripe-signature|razorpay_signature|x-webhook-signature|x-webhook-timestamp/i;
 const HANDLER_NAME_RE = /^(POST|PUT|handler|webhook|default)$/;
 
 /** Anchor the finding on the request handler when we can find one. */
@@ -53,9 +54,21 @@ function readsRequestBody(sf: SourceFile): boolean {
 function pickGateway(gateways: Set<Gateway>, text: string): Gateway | null {
   if (/razorpay/i.test(text)) return 'razorpay';
   if (/stripe/i.test(text)) return 'stripe';
-  if (gateways.has('razorpay')) return 'razorpay';
-  if (gateways.has('stripe')) return 'stripe';
+  if (/cashfree/i.test(text)) return 'cashfree';
+  for (const candidate of ['razorpay', 'stripe', 'cashfree'] as const) {
+    if (gateways.has(candidate)) return candidate;
+  }
   return null;
+}
+
+function fixFor(gateway: Gateway | null): string {
+  if (gateway === 'stripe') {
+    return `Call \`stripe.webhooks.constructEvent(rawBody, signatureHeader, endpointSecret)\` as the first statement in the handler, and return 400 if it throws. Read the raw body — a parsed body will not verify.`;
+  }
+  if (gateway === 'cashfree') {
+    return `Concatenate the \`x-webhook-timestamp\` header with the raw body, HMAC it with \`crypto.createHmac('sha256', CASHFREE_CLIENT_SECRET)\`, base64 encode the digest, and compare it against \`x-webhook-signature\` before any business logic. Note Cashfree base64 encodes rather than hex, and signs timestamp plus body rather than the body alone.`;
+  }
+  return `Compute \`crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET).update(rawBody).digest('hex')\` and compare it against the \`x-razorpay-signature\` header with \`crypto.timingSafeEqual\` before touching any business logic.`;
 }
 
 /**
@@ -81,7 +94,8 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
   if (hasVerification(sf)) return [];
 
   const gateway = pickGateway(gateways, text);
-  const gatewayName = gateway === 'stripe' ? 'Stripe' : 'Razorpay';
+  const gatewayName =
+    gateway === 'stripe' ? 'Stripe' : gateway === 'cashfree' ? 'Cashfree' : 'Razorpay';
 
   return [
     buildFinding({
@@ -91,10 +105,7 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
       confidence: 'confirmed',
       gateway,
       impact: `This handler acts on webhook payloads without verifying they came from ${gatewayName}. The endpoint is public, so anyone who guesses the URL can POST a fake \`payment.captured\` event and mark orders paid for free.`,
-      fix:
-        gateway === 'stripe'
-          ? `Call \`stripe.webhooks.constructEvent(rawBody, signatureHeader, endpointSecret)\` as the first statement in the handler, and return 400 if it throws. Read the raw body — a parsed body will not verify.`
-          : `Compute \`crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET).update(rawBody).digest('hex')\` and compare it against the \`x-razorpay-signature\` header with \`crypto.timingSafeEqual\` before touching any business logic.`,
+      fix: fixFor(gateway),
     }),
   ];
 };

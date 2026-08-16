@@ -7,6 +7,20 @@ published, and removing or renaming one is a breaking change.
 
 ### Added
 
+- **Cashfree support** ([#2](https://github.com/ANSHUL-REAL/moneypath/issues/2)), with the
+  unit inversion it requires. Cashfree bills in decimal rupees, not paise, so the
+  conversion MP002 demands for Razorpay is a 100x overcharge here. MP002 and MP003 no
+  longer fire for Cashfree, and a new rule catches the opposite mistake:
+
+  - **MP007** (high) — amount converted to minor units for a gateway that bills in major
+    units.
+
+  Gateway units are now modelled explicitly rather than assumed, so adding a gateway
+  means declaring which unit it takes. Also handles the older SDK signature where
+  `PGCreateOrder` receives an API version string before the options object, and the
+  Cashfree webhook scheme, which base64 encodes an HMAC over timestamp plus body rather
+  than hex encoding the body alone.
+
 - **Cross-file tracing for MP001** ([#1](https://github.com/ANSHUL-REAL/moneypath/issues/1)).
   Wrapping the gateway call in a helper is how most projects are laid out, and it hid
   the bug completely: the file with the sink sees only a parameter, and the route

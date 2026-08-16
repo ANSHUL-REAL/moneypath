@@ -20,6 +20,7 @@ payment gateway call backwards to its origin.
 - MP004 (high) — amount multiplied by 100 twice, overcharging 100x
 - MP005 (critical) — order marked paid from browser code or an unverified redirect parameter
 - MP006 (critical) — payment webhook handler does not verify its signature
+- MP007 (high) — amount converted to paise for Cashfree, which bills in rupees as a decimal; the conversion MP002 requires for Razorpay is a 100x overcharge here
 
 ## Usage
 
@@ -43,7 +44,7 @@ deliberately prefers false negatives over false positives.
 Syntactic analysis, roughly four hops of backward tracing. Traces across files only for
 the common wrapper case: an amount passed into an exported function that calls the
 gateway, matched by name plus an import check rather than real module resolution.
-Razorpay and Stripe only.
+Razorpay, Stripe and Cashfree only.
 Finds logic flaws, not injection, XSS, or dependency vulnerabilities. A clean run means
 these six specific bugs are absent, not that the checkout is secure.
 

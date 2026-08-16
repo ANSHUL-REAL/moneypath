@@ -11,7 +11,7 @@ export type Severity = 'critical' | 'high' | 'medium';
  */
 export type Confidence = 'confirmed' | 'review';
 
-export type Gateway = 'razorpay' | 'stripe';
+export type Gateway = 'razorpay' | 'stripe' | 'cashfree';
 
 export type RuleId =
   | 'MP001'
@@ -19,7 +19,23 @@ export type RuleId =
   | 'MP003'
   | 'MP004'
   | 'MP005'
-  | 'MP006';
+  | 'MP006'
+  | 'MP007';
+
+/**
+ * Which unit a gateway bills in.
+ *
+ * Razorpay and Stripe take an integer count of the minor unit (paise, cents).
+ * Cashfree takes a decimal in the major unit, so `101.12` means one hundred and
+ * one rupees twelve paise. Getting this backwards is a 100x error in either
+ * direction, so the currency rules invert per gateway rather than assuming
+ * minor units everywhere.
+ */
+export const GATEWAY_USES_MINOR_UNIT: Record<Gateway, boolean> = {
+  razorpay: true,
+  stripe: true,
+  cashfree: false,
+};
 
 export interface Finding {
   rule: RuleId;

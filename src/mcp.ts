@@ -52,9 +52,11 @@ const TOOLS = [
   {
     name: 'scan_payment_code',
     description:
-      'Audit a Razorpay or Stripe checkout for payment logic flaws that let a customer pay less than they owe. ' +
-      'Detects: payment amounts taken from the HTTP request instead of recomputed server-side (MP001); ' +
-      'rupee/paise and dollar/cent conversion bugs including missing, unrounded and doubled conversions (MP002-MP004); ' +
+      'Audit a Razorpay, Stripe or Cashfree checkout for payment logic flaws that let a customer pay less than they owe. ' +
+      'Detects: payment amounts taken from the HTTP request instead of recomputed server-side (MP001), including amounts ' +
+      'passed across files into a wrapper function that calls the gateway; ' +
+      'currency unit bugs, which differ per gateway because Razorpay bills in paise, Stripe in cents, and Cashfree in ' +
+      'decimal rupees, covering missing, unrounded, doubled and unnecessary conversions (MP002-MP004, MP007); ' +
       'orders marked paid by browser code or an unverified redirect (MP005); ' +
       'and payment webhooks that never verify their signature (MP006). ' +
       'Returns structured findings with a file, a line, the traced data path, the impact, and the fix. ' +

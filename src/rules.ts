@@ -54,6 +54,15 @@ export const RULES: Record<RuleId, RuleMeta> = {
       'An order is flipped to a paid state from browser code or from an unverified redirect. Anyone can ' +
       'replay that call and receive goods without paying.',
   },
+  MP007: {
+    id: 'MP007',
+    slug: 'unnecessary-minor-unit-conversion',
+    severity: 'high',
+    title: 'Amount converted to minor units for a gateway that bills in major units',
+    description:
+      'Cashfree takes a decimal amount in rupees, not an integer count of paise. Multiplying by 100 ' +
+      'before handing it over charges the customer one hundred times the intended price.',
+  },
   MP006: {
     id: 'MP006',
     slug: 'unverified-webhook',

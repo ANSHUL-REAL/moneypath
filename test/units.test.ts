@@ -103,6 +103,84 @@ describe('minor-unit conversion', () => {
   });
 });
 
+const CASHFREE_HEAD = `import { Cashfree } from 'cashfree-pg';\n`;
+
+describe('Cashfree bills in rupees, so the unit rules invert', () => {
+  it('accepts a plain decimal amount, which would be flagged for Razorpay', () => {
+    const found = analyze(`${CASHFREE_HEAD}
+      const total = 101.12;
+      Cashfree.PGCreateOrder({ order_amount: total, order_currency: 'INR' });
+    `);
+    expect(rules(found)).toEqual([]);
+  });
+
+  it('accepts a small integer literal, which MP002 flags for Razorpay', () => {
+    const found = analyze(`${CASHFREE_HEAD}
+      Cashfree.PGCreateOrder({ order_amount: 499, order_currency: 'INR' });
+    `);
+    expect(rules(found)).toEqual([]);
+  });
+
+  it('flags a paise conversion as a 100x overcharge', () => {
+    const found = analyze(`${CASHFREE_HEAD}
+      const total = 500;
+      Cashfree.PGCreateOrder({ order_amount: total * 100, order_currency: 'INR' });
+    `);
+    const mp007 = found.find((f) => f.rule === 'MP007');
+    expect(mp007?.confidence).toBe('confirmed');
+    expect(mp007?.gateway).toBe('cashfree');
+    expect(rules(found)).not.toContain('MP002');
+    expect(rules(found)).not.toContain('MP003');
+  });
+
+  it('still traces a client-controlled amount', () => {
+    const found = analyze(`${CASHFREE_HEAD}
+      export async function POST(request: Request) {
+        const { order_amount } = await request.json();
+        return Cashfree.PGCreateOrder({ order_amount, order_currency: 'INR' });
+      }
+    `);
+    expect(rules(found)).toContain('MP001');
+  });
+
+  it('finds the sink when the SDK takes an API version first', () => {
+    // Older Cashfree SDKs are called as PGCreateOrder('2023-08-01', request),
+    // so the options object is not argument zero.
+    const found = analyze(`${CASHFREE_HEAD}
+      const total = 500;
+      Cashfree.PGCreateOrder('2023-08-01', { order_amount: total * 100, order_currency: 'INR' });
+    `);
+    expect(rules(found)).toContain('MP007');
+  });
+
+  it('flags an unverified Cashfree webhook', () => {
+    const found = analyze(`
+      import { prisma } from './db';
+      export async function POST(request: Request) {
+        const event = await request.json();
+        await prisma.order.update({ where: { id: event.data.order.order_id }, data: { status: 'paid' } });
+        return Response.json({ ok: true });
+      }
+    `, '/app/api/webhooks/cashfree/route.ts');
+    expect(rules(found)).toContain('MP006');
+  });
+
+  it('accepts a Cashfree webhook that verifies timestamp plus body', () => {
+    const found = analyze(`
+      import crypto from 'node:crypto';
+      export async function POST(request: Request) {
+        const raw = await request.text();
+        const ts = request.headers.get('x-webhook-timestamp');
+        const signature = request.headers.get('x-webhook-signature');
+        const expected = crypto.createHmac('sha256', 'secret').update(ts + raw).digest('base64');
+        if (expected !== signature) return new Response('no', { status: 400 });
+        return Response.json({ ok: true });
+      }
+    `, '/app/api/webhooks/cashfree/route.ts');
+    expect(rules(found)).toEqual([]);
+  });
+});
+
 describe('client-controlled amount', () => {
   it('traces through object destructuring', () => {
     const found = analyze(`${RAZORPAY_HEAD}

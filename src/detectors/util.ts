@@ -29,6 +29,7 @@ export interface FindingInput {
 export function gatewayName(gateway: Gateway | null): string {
   if (gateway === 'razorpay') return 'Razorpay';
   if (gateway === 'stripe') return 'Stripe';
+  if (gateway === 'cashfree') return 'Cashfree';
   return 'the payment gateway';
 }
 

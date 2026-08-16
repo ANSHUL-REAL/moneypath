@@ -53,6 +53,14 @@ describe('badcart — every planted bug is found', () => {
     expect(findings[0]!.confidence).toBe('confirmed');
   });
 
+  it('MP007 — flags a paise conversion sent to Cashfree', () => {
+    const findings = byRule('MP007');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.file).toBe('lib/cashfree.ts');
+    expect(findings[0]!.gateway).toBe('cashfree');
+    expect(findings[0]!.confidence).toBe('confirmed');
+  });
+
   it('MP005 — flags the browser marking an order paid', () => {
     const findings = byRule('MP005');
     expect(findings).toHaveLength(1);

@@ -6,8 +6,8 @@
 
 **Your checkout trusts the browser. This tells you where.**
 
-A static analyzer that finds payment logic flaws in Razorpay and Stripe integrations —
-the class of bug that lets a customer pay ₹1 for a ₹10,000 order.
+A static analyzer that finds payment logic flaws in Razorpay, Stripe and Cashfree
+integrations — the class of bug that lets a customer pay ₹1 for a ₹10,000 order.
 
 [![npm](https://img.shields.io/npm/v/moneypath.svg)](https://www.npmjs.com/package/moneypath)
 [![CI](https://github.com/ANSHUL-REAL/moneypath/actions/workflows/ci.yml/badge.svg)](https://github.com/ANSHUL-REAL/moneypath/actions)
@@ -65,9 +65,13 @@ you when that source is the browser.
 | **MP004** | High | Amount converted twice — bills the customer 100x |
 | **MP005** | Critical | Order marked paid by browser code or an unverified redirect |
 | **MP006** | Critical | Payment webhook acts on payloads without verifying the signature |
+| **MP007** | High | Amount converted to paise for **Cashfree**, which bills in rupees — the same conversion MP002 requires for Razorpay is a 100x overcharge here |
 
-MP002–MP004 are the rupee/paise family. They are the most common Razorpay integration
-mistake in India and, unlike most logic flaws, they are decidable from the syntax alone.
+MP002–MP004 and MP007 are the currency unit family, the most common integration mistake
+in Indian checkouts and, unlike most logic flaws, decidable from the syntax alone. The
+unit depends on the gateway: Razorpay wants an integer count of paise, Stripe wants
+cents, and Cashfree wants a decimal in rupees. moneypath knows which is which, so it
+will not tell you to add a conversion that would overcharge by 100x.
 
 ## What it looks like
 
@@ -199,7 +203,7 @@ Being straight about the boundaries:
   does this by matching the exported function name and checking the caller imports it,
   not by resolving modules properly, so a wrapper reached through a class method, an
   object property, or a re-export is still missed.
-- It only knows **Razorpay and Stripe**. PayPal, Paddle, Lemon Squeezy, Cashfree and
+- It only knows **Razorpay, Stripe and Cashfree**. PayPal, Paddle, Lemon Squeezy and
   PhonePe are not covered yet.
 - It does **not** replace a security review, a pentest, or reading your own checkout.
 - It finds **logic** flaws, not injection, XSS, or dependency CVEs. Use it alongside
@@ -213,8 +217,9 @@ Rough order, no dates. Opinions welcome in the issues.
 - [x] [**Cross-file tracing**](https://github.com/ANSHUL-REAL/moneypath/issues/1) — done
       for the common case: an amount passed into an exported wrapper that calls the
       gateway. Module-path resolution and method-call wrappers are still open.
-- [ ] [**Cashfree**](https://github.com/ANSHUL-REAL/moneypath/issues/2) — note it takes
-      rupees rather than paise, which inverts MP002
+- [x] [**Cashfree**](https://github.com/ANSHUL-REAL/moneypath/issues/2) — done, including
+      the unit inversion: it takes rupees rather than paise, so MP002 must not fire and a
+      conversion is itself the bug (MP007)
 - [ ] [**Express and Fastify**](https://github.com/ANSHUL-REAL/moneypath/issues/3) —
       webhook detection currently assumes Next.js route shapes
 - [ ] [**Quantity abuse**](https://github.com/ANSHUL-REAL/moneypath/issues/4) — negative

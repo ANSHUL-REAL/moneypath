@@ -1,5 +1,5 @@
 import { Node, SyntaxKind } from 'ts-morph';
-import type { Finding, Gateway } from '../types';
+import { GATEWAY_USES_MINOR_UNIT, type Finding, type Gateway } from '../types';
 import { identifiersIn } from '../analysis/ast';
 import { buildFinding, gatewayName, type Detector } from './util';
 
@@ -20,20 +20,25 @@ interface Units {
   over: string;
 }
 
+const RUPEES: Units = {
+  major: 'rupees',
+  minor: 'paise',
+  under: 'a ₹2,000 order collects ₹20',
+  over: 'a ₹500 order bills ₹50,000',
+};
+
 function units(gateway: Gateway): Units {
-  return gateway === 'razorpay'
-    ? {
-        major: 'rupees',
-        minor: 'paise',
-        under: 'a ₹2,000 order collects ₹20',
-        over: 'a ₹500 order bills ₹50,000',
-      }
-    : {
-        major: 'dollars',
-        minor: 'cents',
-        under: 'a $20.00 order collects $0.20',
-        over: 'a $5.00 order bills $500.00',
-      };
+  if (gateway === 'stripe') {
+    return {
+      major: 'dollars',
+      minor: 'cents',
+      under: 'a $20.00 order collects $0.20',
+      over: 'a $5.00 order bills $500.00',
+    };
+  }
+  // Razorpay and Cashfree are both rupee gateways. They differ in which unit
+  // they accept, not in the currency.
+  return RUPEES;
 }
 
 /** Count how many times the expression multiplies by 100. */
@@ -62,11 +67,14 @@ function operandPairedWith100(node: Node): Node | undefined {
 }
 
 /**
- * MP002 / MP003 / MP004 — minor-unit conversion bugs.
+ * MP002 / MP003 / MP004 / MP007 — currency unit bugs.
  *
- * Razorpay bills in paise and Stripe in cents. This family is the single most
- * common integration mistake in Indian checkouts and, unlike most logic flaws,
- * it is genuinely decidable from the syntax alone.
+ * Razorpay bills in paise and Stripe in cents, so the amount must be an integer
+ * count of the minor unit. Cashfree bills in rupees as a decimal, so the same
+ * conversion that is required for the first two is a 100x overcharge for the
+ * third. This family is the most common integration mistake in Indian
+ * checkouts and, unlike most logic flaws, it is decidable from the syntax
+ * alone.
  */
 export const currencyUnitDetector: Detector = (ctx): Finding[] => {
   const findings: Finding[] = [];
@@ -80,6 +88,26 @@ export const currencyUnitDetector: Detector = (ctx): Finding[] => {
     const { major, minor, under, over } = units(sink.gateway);
     const name = gatewayName(sink.gateway);
     const names = identifiersIn(node);
+
+    // Gateways that bill in the major unit invert this whole family. Cashfree
+    // wants a decimal in rupees, so a fractional value is correct and the
+    // conversion itself is the bug.
+    if (!GATEWAY_USES_MINOR_UNIT[sink.gateway]) {
+      if (conversions === 0) continue;
+
+      findings.push(
+        buildFinding({
+          rule: 'MP007',
+          node,
+          ctx,
+          confidence: 'confirmed',
+          gateway: sink.gateway,
+          impact: `${name} bills in ${major} as a decimal, not in ${minor}. Multiplying by 100 here charges the customer 100x the intended price — ${over}.`,
+          fix: `Pass the rupee value straight through: \`order_amount: total\`, not \`total * 100\`. If your codebase stores money in ${minor}, divide at this boundary rather than multiplying.`,
+        }),
+      );
+      continue;
+    }
 
     if (conversions >= 2) {
       findings.push(
