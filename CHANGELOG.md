@@ -5,6 +5,15 @@ published, and removing or renaming one is a breaking change.
 
 ## [Unreleased]
 
+### Added
+
+- **MP006 now detects Express and Fastify webhooks.** Previously only Next.js style route
+  handlers were recognised, so an Express app registering `/webhooks/razorpay` in
+  `server.ts` was invisible to the scanner. `app.post()`, `router.post()`, `app.use()`,
+  `app.route().post()`, `fastify.post()` and Fastify's object form all count now, and a
+  route path is treated as webhook evidence in its own right, so the file no longer has
+  to be named for the rule to fire. Thanks to @Draoui-Haroun.
+
 ## [0.2.0] — 2026-08-15
 
 Adds a gateway, a rule, and cross-file tracing. Also fixes three false positives that
