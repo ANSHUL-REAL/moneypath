@@ -63,6 +63,15 @@ export const RULES: Record<RuleId, RuleMeta> = {
       'Cashfree takes a decimal amount in rupees, not an integer count of paise. Multiplying by 100 ' +
       'before handing it over charges the customer one hundred times the intended price.',
   },
+    MP008: {
+    id: 'MP008',
+    slug: 'unvalidated-client-quantity',
+    severity: 'critical',
+    title: 'Client quantity is not validated before price calculation',
+    description:
+      'A quantity derived from client input is multiplied into a value that reaches a payment gateway without a visible validation guard. ' +
+      'Negative, zero, fractional, or otherwise invalid quantities can alter the amount charged.',
+  },
   MP006: {
     id: 'MP006',
     slug: 'unverified-webhook',
@@ -72,4 +81,5 @@ export const RULES: Record<RuleId, RuleMeta> = {
       'The handler acts on webhook payloads without checking the gateway signature, so a forged POST can mark ' +
       'any order paid.',
   },
+  
 };

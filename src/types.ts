@@ -20,7 +20,8 @@ export type RuleId =
   | 'MP004'
   | 'MP005'
   | 'MP006'
-  | 'MP007';
+  | 'MP007'
+  | 'MP008';
 
 /**
  * Which unit a gateway bills in.

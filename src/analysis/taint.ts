@@ -140,6 +140,29 @@ function isOpaqueCall(node: Node): boolean {
  * chains nobody can verify by eye, and an unverifiable finding on payment code
  * is worse than no finding at all.
  */
+
+function isServerOwnedExpression(node: Node): boolean {
+  const text = node.getText();
+
+  // Direct database lookup.
+  if (isServerDataRead(node)) {
+    return true;
+  }
+
+  // Walk identifiers and see whether any identifier resolves
+  // to a server-side data-store read.
+  for (const name of resolvableIdentifiers(node)) {
+    const bound = findBoundValue(name, node);
+
+    if (bound && isServerDataRead(bound)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
 export function traceClientTaint(start: Node, maxDepth = 4): TaintResult {
   const seen = new Set<string>();
 
@@ -151,17 +174,53 @@ export function traceClientTaint(start: Node, maxDepth = 4): TaintResult {
   ): TaintResult | null {
     const text = node.getText();
 
+    // Direct client-controlled source.
     const hit = matchClientSource(text);
     if (hit) {
       return {
         tainted: true,
         source: hit,
-        trace: [...trace, `${short(text)}  ⟵  client input via ${hit}`],
+        trace: [
+          ...trace,
+          `${short(text)}  ⟵  client input via ${hit}`,
+        ],
         viaOpaqueCall: viaCall,
       };
     }
 
     if (depth >= maxDepth) return null;
+
+    /*
+     * If this expression is a multiplication, inspect its operands
+     * independently.
+     *
+     * This is important for payment calculations such as:
+     *
+     *   product.price * quantity
+     *
+     * `quantity` is client-controlled, but `product.price` is
+     * server-owned. The entire payment amount must NOT therefore
+     * become MP001-tainted.
+     *
+     * MP008 is responsible for detecting unsafe client-controlled
+     * quantities.
+     */
+    if (
+      Node.isBinaryExpression(node) &&
+      node.getOperatorToken().getKind() === SyntaxKind.AsteriskToken
+    ) {
+      const left = node.getLeft();
+      const right = node.getRight();
+
+      const leftServerOwned = isServerOwnedExpression(left);
+      const rightServerOwned = isServerOwnedExpression(right);
+
+      // A multiplication containing a server-owned value is not
+      // automatically a client-controlled payment amount.
+      if (leftServerOwned || rightServerOwned) {
+        return null;
+      }
+    }
 
     for (const name of resolvableIdentifiers(node)) {
       if (seen.has(name)) continue;
@@ -170,8 +229,7 @@ export function traceClientTaint(start: Node, maxDepth = 4): TaintResult {
       const bound = findBoundValue(name, node);
       if (!bound) continue;
 
-      // The value came out of the application's own database. Whatever the
-      // client influenced upstream, the price itself is server-owned.
+      // Database/store reads are server-owned.
       if (isServerDataRead(bound)) continue;
 
       const result = walk(
@@ -180,6 +238,7 @@ export function traceClientTaint(start: Node, maxDepth = 4): TaintResult {
         [...trace, `${name}  ⟵  ${short(bound.getText())}`],
         viaCall || isOpaqueCall(bound),
       );
+
       if (result) return result;
     }
 

@@ -50,7 +50,8 @@ function findExportedHandlers(sf: SourceFile): HandlerInfo[] {
 }
 
 /**
- * Find Express/Fastify webhook routes and keep the route + handler together.
+ * Find Express/Fastify webhook routes and keep
+ * the route + handler together.
  */
 function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
   const handlers: HandlerInfo[] = [];
@@ -61,6 +62,7 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
 
     /*
      * Express:
+     *
      * app.post('/webhooks/razorpay', handler)
      * router.post('/webhooks/stripe', handler)
      */
@@ -75,13 +77,11 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
 
       if (!/webhook/i.test(route)) continue;
 
-      const handler = args
-        .slice(1)
-        .find(
-          (arg) =>
-            arg.isKind(SyntaxKind.ArrowFunction) ||
-            arg.isKind(SyntaxKind.FunctionExpression),
-        );
+      const handler = args.slice(1).find(
+        (arg) =>
+          arg.isKind(SyntaxKind.ArrowFunction) ||
+          arg.isKind(SyntaxKind.FunctionExpression),
+      );
 
       if (!handler) continue;
 
@@ -96,6 +96,7 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
 
     /*
      * Fastify:
+     *
      * fastify.post('/webhooks/razorpay', handler)
      */
     if (expression === 'fastify.post') {
@@ -109,13 +110,11 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
 
       if (!/webhook/i.test(route)) continue;
 
-      const handler = args
-        .slice(1)
-        .find(
-          (arg) =>
-            arg.isKind(SyntaxKind.ArrowFunction) ||
-            arg.isKind(SyntaxKind.FunctionExpression),
-        );
+      const handler = args.slice(1).find(
+        (arg) =>
+          arg.isKind(SyntaxKind.ArrowFunction) ||
+          arg.isKind(SyntaxKind.FunctionExpression),
+      );
 
       if (!handler) continue;
 
@@ -129,7 +128,8 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
     }
 
     /*
-     * Fastify:
+     * Fastify route object:
+     *
      * fastify.route({
      *   method: 'POST',
      *   url: '/webhooks/razorpay',
@@ -139,7 +139,9 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
     if (expression === 'fastify.route') {
       const config = args[0];
 
-      if (!config || !Node.isObjectLiteralExpression(config)) continue;
+      if (!config || !Node.isObjectLiteralExpression(config)) {
+        continue;
+      }
 
       const configText = config.getText();
 
@@ -148,6 +150,14 @@ function findWebhookRoutes(sf: SourceFile): HandlerInfo[] {
 
       const routeMatch =
         /url\s*:\s*['"`]([^'"`]*)['"`]/i.exec(configText);
+
+      /*
+       * IMPORTANT:
+       *
+       * routeMatch may be undefined.
+       * Use optional chaining so routeMatch[1]
+       * is never accessed unsafely.
+       */
       const route = routeMatch?.[1];
 
       if (!methodMatches || !route || !/webhook/i.test(route)) {
@@ -197,12 +207,10 @@ function readsRequestBody(text: string): boolean {
 }
 
 /**
- * Detect gateway evidence ONLY from the route and handler.
+ * Detect gateway evidence only from the route and handler.
  *
- * Important:
- * We deliberately do not use the whole file text here.
- * An imported Stripe/Razorpay SDK is not enough to prove that
- * this particular webhook belongs to that gateway.
+ * An SDK import alone is not enough to prove that
+ * a specific webhook belongs to that gateway.
  */
 function pickGateway(
   gateways: Set<Gateway>,
@@ -226,6 +234,9 @@ function pickGateway(
   return null;
 }
 
+/**
+ * Gateway-specific remediation.
+ */
 function fixFor(gateway: Gateway): string {
   if (gateway === 'stripe') {
     return `Call \`stripe.webhooks.constructEvent(rawBody, signatureHeader, endpointSecret)\` as the first statement in the handler, and return 400 if it throws. Read the raw body — a parsed body will not verify.`;
@@ -239,8 +250,8 @@ function fixFor(gateway: Gateway): string {
 }
 
 /**
- * Signature verification must also be checked only inside
- * the specific handler being analyzed.
+ * Check whether the specific handler performs
+ * webhook/signature verification.
  */
 function hasVerificationForText(text: string): boolean {
   const sdkVerification =
@@ -249,7 +260,10 @@ function hasVerificationForText(text: string): boolean {
   const helperVerification =
     /\b\w*(?:verif|valid|check|assert|ensure)\w*(?:signature|webhook|hmac)\w*\s*\(|\b\w*(?:signature|webhook|hmac)\w*(?:verif|valid|check)\w*\s*\(/i;
 
-  return sdkVerification.test(text) || helperVerification.test(text);
+  return (
+    sdkVerification.test(text) ||
+    helperVerification.test(text)
+  );
 }
 
 function gatewayName(gateway: Gateway): string {
@@ -258,34 +272,38 @@ function gatewayName(gateway: Gateway): string {
   return 'Cashfree';
 }
 
-export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
+export const webhookSignatureDetector: Detector = (
+  ctx,
+): Finding[] => {
   const sf = ctx.sourceFile;
 
   /*
-   * Gateway names are still collected at file level, but they are
-   * ONLY used as a guard that the file contains payment-related code.
+   * Collect payment gateway context at file level only
+   * as a payment-code guard.
    *
-   * They are NOT used to decide that a particular handler is a
-   * payment webhook.
+   * Gateway context is NOT enough to classify an individual
+   * handler as a payment webhook.
    */
   const gateways = getGatewayContext(sf);
 
-  if (gateways.size === 0) return [];
+  if (gateways.size === 0) {
+    return [];
+  }
 
   /*
-   * Express/Fastify:
+   * Express/Fastify routes.
    *
-   * Route + handler are treated as one unit.
+   * Route and handler are analyzed together.
    *
-   * This prevents:
+   * This avoids false positives such as:
    *
-   *   Stripe import
-   *        +
-   *   GitHub webhook
-   *        +
-   *   req.body
+   * Stripe SDK import
+   * +
+   * GitHub webhook
+   * +
+   * req.body
    *
-   * from becoming MP006.
+   * becoming MP006.
    */
   const routes = findWebhookRoutes(sf);
 
@@ -309,7 +327,11 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
         ctx,
         confidence: 'confirmed',
         gateway,
-        impact: `This handler acts on webhook payloads without verifying they came from ${gatewayName(gateway)}. The endpoint is public, so anyone who guesses the URL can POST a fake \`payment.captured\` event and mark orders paid for free.`,
+        impact:
+          `This handler acts on webhook payloads without verifying ` +
+          `they came from ${gatewayName(gateway)}. The endpoint is ` +
+          `public, so anyone who guesses the URL can POST a fake ` +
+          `\`payment.captured\` event and mark orders paid for free.`,
         fix: fixFor(gateway),
       }),
     ];
@@ -318,8 +340,8 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
   /*
    * Next.js / framework-style exported handlers.
    *
-   * These do not have an Express-style route call in the AST,
-   * so the file path may identify the webhook route.
+   * These handlers do not necessarily have an Express/Fastify
+   * route call, so the file path can provide webhook evidence.
    */
   const handlers = findExportedHandlers(sf);
 
@@ -331,12 +353,11 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
     /*
      * Webhook evidence must be associated with this handler.
      *
-     * A file-level "webhook" string is deliberately NOT enough.
+     * Accepted evidence:
      *
-     * For a framework handler we accept:
-     *   - webhook in the file path, OR
-     *   - a signature header in this handler, OR
-     *   - webhook in this handler.
+     * 1. webhook in the file path
+     * 2. webhook in the handler
+     * 3. a known webhook signature header in the handler
      */
     const looksLikeWebhook =
       /webhook/i.test(ctx.relPath) ||
@@ -346,19 +367,17 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
     if (!looksLikeWebhook) continue;
 
     /*
-     * Gateway must also be associated with this handler/path.
+     * Gateway evidence must also belong to this handler/path.
      *
-     * We do NOT fall back to:
-     *
-     *   pickGateway(gateways, '', ctx.relPath)
-     *
-     * because that lets an unrelated SDK import become gateway
-     * evidence for the handler.
+     * Do not use the entire file path as gateway evidence unless
+     * the path actually contains "webhook".
      */
     const gateway = pickGateway(
       gateways,
       handlerText,
-      /webhook/i.test(ctx.relPath) ? ctx.relPath : undefined,
+      /webhook/i.test(ctx.relPath)
+        ? ctx.relPath
+        : undefined,
     );
 
     if (!gateway) continue;
@@ -372,7 +391,11 @@ export const webhookSignatureDetector: Detector = (ctx): Finding[] => {
         ctx,
         confidence: 'confirmed',
         gateway,
-        impact: `This handler acts on webhook payloads without verifying they came from ${gatewayName(gateway)}. The endpoint is public, so anyone who guesses the URL can POST a fake \`payment.captured\` event and mark orders paid for free.`,
+        impact:
+          `This handler acts on webhook payloads without verifying ` +
+          `they came from ${gatewayName(gateway)}. The endpoint is ` +
+          `public, so anyone who guesses the URL can POST a fake ` +
+          `\`payment.captured\` event and mark orders paid for free.`,
         fix: fixFor(gateway),
       }),
     ];
